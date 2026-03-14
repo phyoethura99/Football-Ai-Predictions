@@ -1,0 +1,151 @@
+/* ၁။ UI အမှိုက်များကို နျူကလီးယားနည်းလမ်းဖြင့် အမြစ်ပြတ် ဖျောက်မည် */
+
+#viewerBadge, .viewerBadge_container__1QS9N, [data-testid="stStatusWidget"] { display: none !important; }
+.stAppDeployButton, [data-testid="stAppDeployButton"], [data-testid="stHeaderActionElements"], .stAppToolbar, [data-testid="stToolbar"] { display: none !important; }
+header, [data-testid="stHeader"], [data-testid="stDecoration"] { display: none !important; height: 0 !important; }
+footer, .stFooter, [data-testid="stFooter"], #MainMenu { display: none !important; }
+
+/* Background & Padding Fix (Deep Navy ပြောင်းထားသည်) */
+.stApp { background-color: #000814 !important; }
+.st-emotion-cache-18ni7ap {padding: 0 !important;}
+
+/* Selectbox Fix & Cursor Visible */
+div[data-baseweb="select"] input { caret-color: white !important; }
+input { caret-color: white !important; }
+
+/* Loading Bar အရောင်ကို Neon Violet ပြောင်းခြင်း */
+div[data-testid="stProgress"] > div > div > div > div {
+    background-color: #9D00FF !important;
+    box-shadow: 0 0 15px #9D00FF !important;
+}
+
+/* Match Row Style (Neon Yellow & Bold) */
+.match-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 0, 0.05) !important;
+    border: 1px solid #FFFF00 !important;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    color: #FFFF00 !important;
+    font-weight: 900 !important;
+    text-transform: uppercase;
+    box-shadow: 0 0 10px rgba(255, 255, 0, 0.2);
+    font-size: 14px;
+}
+.col-no { width: 10%; text-align: left; color: white; }
+.col-time { width: 25%; text-align: center; color: #FF9D00; }
+.col-team { width: 25%; text-align: center; }
+.col-vs { width: 15%; text-align: center; color: white; font-style: italic; }
+
+/* ၂။ Gradient Text (Predictions & Select Team) */
+.title-style {
+    text-align: center;
+    font-size: 55px;
+    font-weight: 900;
+    background: linear-gradient(to bottom, #FF80FF 20%, #AA00FF 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 10px 0;
+}
+
+/* ၃။ Select Boxes (Neon Green) */
+div[data-baseweb="select"] > div {
+    background-color: #0c0c0c !important;
+    border: 2px solid #39FF14 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 0 15px rgba(57, 255, 20, 0.4);
+}
+
+/* ၄။ Glossy Button Styles (မူရင်း Button ပေါ် တိုက်ရိုက်သက်ရောက်စေရန်) */
+
+/* Blue Glossy (Language) */
+.lang-wrapper div.stButton > button {
+    background: linear-gradient(180deg, #00D2FF 0%, #3a7bd5 100%) !important;
+    border: 2px solid #00D2FF !important;
+    border-radius: 20px !important;
+    color: white !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    height: 40px !important;
+    box-shadow: 0 0 15px rgba(0, 210, 255, 0.6), inset 0 5px 10px rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Green Glossy (Check Match) */
+.check-btn-wrapper div.stButton > button {
+    background: linear-gradient(180deg, #00FF00 0%, #008000 100%) !important;
+    border: 3px solid #00D2FF !important;
+    border-radius: 40px !important;
+    color: black !important;
+    font-size: 28px !important;
+    font-weight: 900 !important;
+    height: 70px !important;
+    box-shadow: 0 0 20px rgba(0, 210, 255, 0.8), inset 0 10px 15px rgba(255, 255, 255, 0.8) !important;
+    margin-top: 20px !important;
+}
+/* ၅။ Match Box Container */
+.match-box-container {
+    padding: 10px 0;
+    margin: 10px 0;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+}
+
+/* ၆။ VS Ball (White Glow) */
+.vs-ball {
+    width: 75px;
+    height: 75px;
+    background: linear-gradient(90deg, #39FF14 50%, #FF4500 50%);
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 0 25px white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    color: black;
+    font-size: 22px;
+}
+
+/* ၇။ Orange Glossy (Generate Predictions) */
+.gen-btn-wrapper div.stButton > button {
+    background: linear-gradient(180deg, #FF9500 0%, #FF4500 100%) !important;
+    border: 3px solid #00D2FF !important;
+    border-radius: 50px !important;
+    color: white !important;
+    font-size: 32px !important;
+    font-weight: 900 !important;
+    height: 85px !important;
+    box-shadow: 0 0 25px rgba(0, 210, 255, 0.8), inset 0 10px 20px rgba(255, 255, 255, 0.8) !important;
+    margin-top: 20px !important;
+}
+
+/* ၈။ Reset Streamlit Default Styles */
+
+/* ခလုတ်များ၏ မူရင်း Border နှင့် Hover ကို ဖျောက်ခြင်း */
+div.stButton > button {
+    width: 100% !important;
+    outline: none !important;
+    transition: transform 0.1s, box-shadow 0.1s !important;
+}
+
+div.stButton > button:active {
+    transform: scale(0.96) !important;
+}
+
+/* Hover effect များကို Glossy နှင့် Neon Blue ပေါင်းစပ်ထားခြင်း */
+div.stButton > button:hover, div.stButton > button:focus {
+    color: inherit !important;
+    background: inherit !important;
+    border: 3px solid #00D2FF !important;
+    box-shadow: 0 0 30px rgba(0, 210, 255, 1) !important;
+}
+
+/* Wrapper Structure */
+.lang-wrapper, .check-btn-wrapper, .gen-btn-wrapper {
+    width: 100%;
+    margin: 0 !important;
+  }
