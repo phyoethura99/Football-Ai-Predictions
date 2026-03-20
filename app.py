@@ -31,7 +31,6 @@ def get_disk_cache(key):
             with open(file_path, "r") as f:
                 cache_data = json.load(f)
                 expiry = datetime.datetime.fromisoformat(cache_data['expiry'])
-                # Timezone-aware object သုံး၍ နှိုင်းယھဉ်ခြင်း
                 if datetime.datetime.now(datetime.timezone.utc) < expiry.replace(tzinfo=datetime.timezone.utc):
                     return cache_data['data']
         except:
@@ -50,11 +49,9 @@ def set_disk_cache(key, data, expiry_dt=None, days=19):
     except Exception as e:
         st.sidebar.error(f"Cache Error: {str(e)}")
 
-# Time Handling (Warning ပျောက်ရန် utcnow အစား timezone-aware object သုံးခြင်း)
+# Time Handling
 now_mm = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=6, minutes=30)
 today_mm = now_mm.date()
-yesterday_mm = today_mm - datetime.timedelta(days=1)
-tomorrow_mm = today_mm + datetime.timedelta(days=1)
 
 # ၁။ Dictionary & Session State
 if 'lang' not in st.session_state:
@@ -95,46 +92,30 @@ d = {
 }
 lang = st.session_state.lang
 
-# --- ပြင်ဆင်ချက်- Competitions ၁၇ ခုစလုံး စုံအောင် ဖြည့်စွက်ထားသည် ---
+# Competitions အားလုံး စုံအောင် ဖြည့်စွက်ထားသည်
 league_codes = {
     "All Leagues": "ALL",
     "Premier League (England)": "PL",
-    "Championship (England)": "ELC",
     "Champions League (Europe)": "CL",
-    "European Championship": "EC",
     "La Liga (Spain)": "PD",
     "Bundesliga (Germany)": "BL1",
     "Serie A (Italy)": "SA",
     "Ligue 1 (France)": "FL1",
-    "Primeira Liga (Portugal)": "PPL",
+    "Europa League (Europe)": "EL",
     "Eredivisie (Netherlands)": "DED",
-    "Serie A (Brazil)": "BSA",
-    "FIFA World Cup": "WC",
-    "FA Cup (England)": "AS_45",
-    "Carabao Cup (England)": "AS_48",
-    "Copa del Rey (Spain)": "AS_143",
-    "Coppa Italia (Italy)": "AS_137",
-    "DFB Pokal (Germany)": "AS_175"
+    "Primeira Liga (Portugal)": "PPL"
 }
 
 league_name_map = {
     "Premier League": "Premier League (England)",
-    "Championship": "Championship (England)",
     "UEFA Champions League": "Champions League (Europe)",
-    "European Championship": "European Championship",
     "Primera Division": "La Liga (Spain)",
     "Bundesliga": "Bundesliga (Germany)",
     "Serie A": "Serie A (Italy)",
     "Ligue 1": "Ligue 1 (France)",
-    "Primeira Liga": "Primeira Liga (Portugal)",
+    "UEFA Europa League": "Europa League (Europe)",
     "Eredivisie": "Eredivisie (Netherlands)",
-    "Campeonato Brasileiro Série A": "Serie A (Brazil)",
-    "FIFA World Cup": "FIFA World Cup",
-    "FA Cup": "FA Cup (England)",
-    "EFL Cup": "Carabao Cup (England)",
-    "Copa del Rey": "Copa del Rey (Spain)",
-    "Coppa Italia": "Coppa Italia (Italy)",
-    "DFB Pokal": "DFB Pokal (Germany)"
+    "Primeira Liga": "Primeira Liga (Portugal)"
 }
 
 with open("style.css") as f:
@@ -149,11 +130,9 @@ with col_lang:
 
 st.markdown(f'<div class="title-style">{d[lang]["title1"]}</div>', unsafe_allow_html=True)
 
-
 # ၂။ Select League & Date
 st.markdown(f'<p style="color:#aaa; margin-left:15px;">{d[lang]["sel_league"]}</p>', unsafe_allow_html=True)
-league_keys = list(league_codes.keys())
-league = st.selectbox("L", league_keys, index=1, label_visibility="collapsed")
+league = st.selectbox("L", list(league_codes.keys()), index=1, label_visibility="collapsed")
 
 st.markdown(f'<p style="color:#aaa; margin-left:15px; margin-top:15px;">{d[lang]["sel_date"]}</p>', unsafe_allow_html=True)
 date_option = st.radio("Date Option", d[lang]['date_opts'], horizontal=True, label_visibility="collapsed")
@@ -174,190 +153,96 @@ if check_click:
     with st.spinner('Checking Matches...'):
         try:
             l_code = league_codes[league]
-            table_cache_key = f"table_v2_{l_code}_{sel_date}_{date_option}"
-            cached_table = get_disk_cache(table_cache_key)
-
-            if cached_table:
-                st.session_state.display_matches = cached_table['matches']
-                st.session_state.h_teams = cached_table['h_teams']
-                st.session_state.a_teams = cached_table['a_teams']
+            token = st.secrets["api_keys"]["FOOTBALL_DATA_KEY"]
+            
+            if date_option == d[lang]['date_opts'][1]:
+                d_from, d_to = today_mm, today_mm + datetime.timedelta(days=1)
+            elif date_option == d[lang]['date_opts'][2]:
+                d_from, d_to = today_mm, today_mm + datetime.timedelta(days=2)
             else:
-                matches = []
-                # --- ပြင်ဆင်ချက်- Cup ပွဲစဉ်များအတွက် API-Sports ကို သုံး၍ Fixture ဆွဲယူခြင်း ---
-                if l_code.startswith("AS_"):
-                    as_id = l_code.split("_")[1]
-                    as_token = st.secrets["api_keys"]["API_SPORTS_KEY"]
-                    url = f"https://v3.football.api-sports.io/fixtures?league={as_id}&season={today_mm.year}&date={sel_date}"
-                    headers = {'x-rapidapi-host': "v3.football.api-sports.io", 'x-rapidapi-key': as_token}
-                    res = requests.get(url, headers=headers).json()
-                    as_matches = res.get('response', [])
-                    for m in as_matches:
-                        matches.append({
-                            'status': m['fixture']['status']['short'],
-                            'utcDate': m['fixture']['date'],
-                            'homeTeam': {'name': m['teams']['home']['name'], 'crest': m['teams']['home']['logo']},
-                            'awayTeam': {'name': m['teams']['away']['name'], 'crest': m['teams']['away']['logo']},
-                            'competition': {'name': m['league']['name']}
-                        })
-                else:
-                    # Football-data API
-                    token = st.secrets["api_keys"]["FOOTBALL_DATA_KEY"]
-                    if date_option == d[lang]['date_opts'][1]:
-                        d_from, d_to = today_mm, today_mm + datetime.timedelta(days=1)
-                    elif date_option == d[lang]['date_opts'][2]:
-                        d_from, d_to = today_mm, today_mm + datetime.timedelta(days=2)
-                    else:
-                        d_from = d_to = sel_date
+                d_from = d_to = sel_date
 
-                    d_from_api, d_to_api = d_from - datetime.timedelta(days=1), d_to + datetime.timedelta(days=1)
-
-                    if l_code == "ALL":
-                        target_codes = ",".join([v for k, v in league_codes.items() if not v.startswith("AS_") and v != "ALL"])
-                        url = f"https://api.football-data.org/v4/matches?competitions={target_codes}&dateFrom={d_from_api}&dateTo={d_to_api}"
-                    else:
-                        url = f"https://api.football-data.org/v4/competitions/{l_code}/matches?dateFrom={d_from_api}&dateTo={d_to_api}"
-                    
-                    headers = {'X-Auth-Token': token}
-                    data = requests.get(url, headers=headers).json()
-                    matches = data.get('matches', [])
-                
-                st.session_state.display_matches = [] 
-                if matches:
-                    h_set, a_set = set(), set()
-                    for m in matches:
-                        # API-Sports status သည် 'NS' (Not Started) သို့မဟုတ် Football-data status
-                        if m.get('status') in ['SCHEDULED', 'TIMED', 'NS']:
-                            utc_str = m['utcDate'].replace("Z", "+00:00")
-                            utc_dt = datetime.datetime.fromisoformat(utc_str)
-                            mm_dt = utc_dt + datetime.timedelta(hours=6, minutes=30)
-                            
-                            h, a = m['homeTeam']['name'], m['awayTeam']['name']
-                            h_logo = m['homeTeam'].get('crest', '')
-                            a_logo = m['awayTeam'].get('crest', '')
-                            l_display = league_name_map.get(m['competition']['name'], m['competition']['name'])
-                            dt_str = mm_dt.strftime("%d/%m %H:%M")
-                            h_set.add(h); a_set.add(a)
-                            st.session_state.display_matches.append({
-                                'datetime': dt_str, 'home': h, 'away': a, 'league': l_display,
-                                'h_logo': h_logo, 'a_logo': a_logo, 'utc_str': m['utcDate']
-                            })
-                    
-                    st.session_state.h_teams = ["Select Team"] + sorted(list(h_set)) if h_set else ["No matches found"]
-                    st.session_state.a_teams = ["Select Team"] + sorted(list(a_set)) if a_set else ["No matches found"]
-                    
-                    set_disk_cache(table_cache_key, {
-                        'matches': st.session_state.display_matches,
-                        'h_teams': st.session_state.h_teams,
-                        'a_teams': st.session_state.a_teams
-                    }, expiry_dt=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=59))
-                else:
-                    st.session_state.h_teams = st.session_state.a_teams = ["No matches found"]
+            if l_code == "ALL":
+                target_codes = ",".join([v for k, v in league_codes.items() if v != "ALL"])
+                url = f"https://api.football-data.org/v4/matches?competitions={target_codes}&dateFrom={d_from}&dateTo={d_to}"
+            else:
+                url = f"https://api.football-data.org/v4/competitions/{l_code}/matches?dateFrom={d_from}&dateTo={d_to}"
+            
+            headers = {'X-Auth-Token': token}
+            response = requests.get(url, headers=headers)
+            data = response.json()
+            matches = data.get('matches', [])
+            
+            st.session_state.display_matches = [] 
+            if matches:
+                h_set, a_set = set(), set()
+                for m in matches:
+                    utc_dt = datetime.datetime.strptime(m['utcDate'], "%Y-%m-%dT%H:%M:%SZ")
+                    mm_dt = utc_dt + datetime.timedelta(hours=6, minutes=30)
+                    h, a = m['homeTeam']['name'], m['awayTeam']['name']
+                    l_display = league_name_map.get(m['competition']['name'], m['competition']['name'])
+                    h_set.add(h); a_set.add(a)
+                    st.session_state.display_matches.append({
+                        'datetime': mm_dt.strftime("%d/%m %H:%M"), 'home': h, 'away': a, 'league': l_display,
+                        'h_logo': m['homeTeam'].get('crest', ''), 'a_logo': m['awayTeam'].get('crest', ''), 'utc_str': m['utcDate']
+                    })
+                st.session_state.h_teams = ["Select Team"] + sorted(list(h_set))
+                st.session_state.a_teams = ["Select Team"] + sorted(list(a_set))
+            else:
+                st.session_state.h_teams = ["No matches found"]
+                st.session_state.a_teams = ["No matches found"]
         except Exception as e:
             st.error(f"Error: {str(e)}")
 
 # Display Matches Table
 if st.session_state.display_matches:
-    grouped_matches = {}
-    for match in st.session_state.display_matches:
-        grouped_matches.setdefault(match['league'], []).append(match)
-    
-    for l_title, matches_list in grouped_matches.items():
-        st.markdown(f'<div style="color:#FFD700; font-weight:bold; margin: 15px 0 5px 15px; border-bottom: 1px solid #333;">🏆 {l_title}</div>', unsafe_allow_html=True)
+    grouped = {}
+    for m in st.session_state.display_matches:
+        grouped.setdefault(m['league'], []).append(m)
+    for l_title, matches_list in grouped.items():
+        st.markdown(f'<div style="color:#FFD700; font-weight:bold; margin: 15px 0 5px 15px;">🏆 {l_title}</div>', unsafe_allow_html=True)
         for idx, m in enumerate(matches_list, 1):
-            st.markdown(f"""
-                <div class="match-row" style="height: auto; padding: 15px 10px;">
-                    <div class="col-no">#{idx}</div>
-                    <div class="col-time" style="font-size: 11px;">📅 {m['datetime']}</div>
-                    <div class="col-team" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
-                        <img src="{m['h_logo']}" width="30" style="margin-bottom:5px;">
-                        <div>{m['home']}</div>
-                    </div>
-                    <div class="col-vs">VS</div>
-                    <div class="col-team" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
-                        <img src="{m['a_logo']}" width="30" style="margin-bottom:5px;">
-                        <div>{m['away']}</div>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'<div class="match-row" style="padding:10px; border-bottom:1px solid #333; display:flex; justify-content:space-between;"><span>#{idx} {m["datetime"]}</span><span>{m["home"]} vs {m["away"]}</span></div>', unsafe_allow_html=True)
 elif st.session_state.check_performed:
-    st.markdown(f"""
-        <div style="background-color:rgba(255,0,0,0.1); padding:20px; border-radius:10px; border:1px solid #ff4b4b; text-align:center; margin:20px;">
-            <h3 style="color:#ff4b4b; margin:0;">⚠️ Warning</h3>
-            <p style="color:white; font-size:18px; margin-top:10px;">{d[lang]['no_fixture']}</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.error(d[lang]['no_fixture'])
 
 # ၄။ Select Team Title
 st.markdown(f'<div class="title-style" style="font-size:45px; margin-top:20px;">{d[lang]["title2"]}</div>', unsafe_allow_html=True)
 
-# --- Helper: API-Sports Data Fetching with Strict ID & League Info ---
-def get_api_sports_stats(h_team, a_team, match_date, h_id=None, a_id=None):
-    # API Keys Rotation Logic
-    api_keys = [st.secrets["api_keys"].get(f"APISPORTS_KEY_{i}", st.secrets["api_keys"].get("API_SPORTS_KEY")) for i in range(1, 5)]
-    api_keys = [k for k in api_keys if k]
-    headers_list = [{'x-rapidapi-host': "v3.football.api-sports.io", 'x-rapidapi-key': key} for key in api_keys]
-    
-    MAJOR_LEAGUE_IDS = {'Premier League': 39, 'La Liga': 140, 'Serie A': 135, 'Bundesliga': 78, 'Ligue 1': 61}
-    
-    for headers in headers_list:
-        try:
-            time.sleep(1)
-            search_url = f"https://v3.football.api-sports.io/fixtures?date={match_date}"
-            res = requests.get(search_url, headers=headers, timeout=15).json()
-            
-            fixture_obj = None
-            if 'response' in res and res['response']:
-                for f in res['response']:
-                    f_home, f_away = f['teams']['home']['name'].lower(), f['teams']['away']['name'].lower()
-                    h_target, a_target = h_team.lower(), a_team.lower()
-                    if (h_target in f_home or f_home in h_target) and (a_target in f_away or f_away in a_target):
-                        fixture_obj = f; break
-            
-            if not fixture_obj: continue 
-            f_id, h_real_id, a_real_id = fixture_obj['fixture']['id'], fixture_obj['teams']['home']['id'], fixture_obj['teams']['away']['id']
-            league_id, season = fixture_obj['league']['id'], fixture_obj['league']['season']
+# --- Helper: API-Sports Data Fetching (No Rotate) ---
+def get_api_sports_stats(h_team, a_team, match_date):
+    api_key = st.secrets["api_keys"]["API_SPORTS_KEY"]
+    headers = {'x-rapidapi-host': "v3.football.api-sports.io", 'x-rapidapi-key': api_key}
+    try:
+        res = requests.get(f"https://v3.football.api-sports.io/fixtures?date={match_date}", headers=headers, timeout=15).json()
+        fixture = next((f for f in res.get('response', []) if h_team.lower() in f['teams']['home']['name'].lower() or a_team.lower() in f['teams']['away']['name'].lower()), None)
+        if not fixture: return None
+        f_id, h_id, a_id = fixture['fixture']['id'], fixture['teams']['home']['id'], fixture['teams']['away']['id']
+        inj = requests.get(f"https://v3.football.api-sports.io/injuries?fixture={f_id}", headers=headers).json()
+        stand = requests.get(f"https://v3.football.api-sports.io/standings?league={fixture['league']['id']}&season={fixture['league']['season']}", headers=headers).json()
+        h_next = requests.get(f"https://v3.football.api-sports.io/fixtures?team={h_id}&next=1", headers=headers).json()
+        a_next = requests.get(f"https://v3.football.api-sports.io/fixtures?team={a_id}&next=1", headers=headers).json()
+        return {
+            'injuries': inj.get('response', []), 'standings': str(stand.get('response', [])),
+            'h_schedule': h_next.get('response', []), 'a_schedule': a_next.get('response', []),
+            'h_id': h_id, 'a_id': a_id, 'league_name': fixture['league']['name']
+        }
+    except: return None
 
-            standings_data = ""
-            s_res = requests.get(f"https://v3.football.api-sports.io/standings?league={league_id}&season={season}", headers=headers, timeout=10).json()
-            if s_res.get('response'):
-                for group in s_res['response'][0]['league']['standings']:
-                    for rank in group:
-                        if int(rank['team']['id']) in [int(h_real_id), int(a_real_id)]:
-                            standings_data += f"[{s_res['response'][0]['league']['name']}] {rank['team']['name']}: Rank {rank['rank']} (Pts: {rank['points']}, Form: {rank.get('form', 'N/A')}). "
-
-            pred_res = requests.get(f"https://v3.football.api-sports.io/predictions?fixture={f_id}", headers=headers, timeout=10).json()
-            inj_res = requests.get(f"https://v3.football.api-sports.io/injuries?fixture={f_id}", headers=headers, timeout=10).json()
-            h_l10 = requests.get(f"https://v3.football.api-sports.io/fixtures?team={h_real_id}&last=10&status=FT", headers=headers, timeout=10).json()
-            a_l10 = requests.get(f"https://v3.football.api-sports.io/fixtures?team={a_real_id}&last=10&status=FT", headers=headers, timeout=10).json()
-            
-            return {
-                'analysis': pred_res.get('response', [None])[0],
-                'injuries': inj_res.get('response', []),
-                'standings': standings_data if standings_data else "No Standings Found",
-                'h_last_10': h_l10.get('response', []),
-                'a_last_10': a_l10.get('response', []),
-                'h_id': h_real_id, 'a_id': a_real_id,
-                'league_name': fixture_obj['league']['name']
-            }
-        except Exception: continue 
-    return None
-
+# --- Helper: AI Response (No Rotate, Correct Model Name) ---
 def get_gemini_response_rotated(prompt):
-    # Gemini Keys Rotation (Supports both single key or numbered keys)
-    ai_keys = [st.secrets["api_keys"].get(f"GEMINI_KEY_{i}", st.secrets["api_keys"].get("GEMINI_KEY")) for i in range(1, 4)]
-    ai_keys = [k for k in ai_keys if k]
-    for key in ai_keys:
-        try:
-            # genai Version 2.0 Client (အစ်ကို့ code ထဲက import အတိုင်း)
-            client = genai.Client(api_key=key)
-            response = client.models.generate_content(
-                model='gemini-2.0-flash', # Version အသစ်သို့ ပြောင်းလဲခြင်း
-                contents=prompt,
-                config={'temperature': 0.7}
-            )
-            return response.text
-        except Exception: continue 
-    return "⚠️ AI Service Busy. Please try again later."
+    key = st.secrets["api_keys"]["GEMINI_KEY"]
+    try:
+        client = genai.Client(api_key=key)
+        response = client.models.generate_content(
+            model='gemini-flash-latest', # မူရင်းအတိုင်း ထားရှိပါသည်
+            contents=prompt,
+            config={'temperature': 0}
+        )
+        return response.text
+    except Exception as e:
+        return f"⚠️ AI Service Busy: {str(e)}"
+        
                         
 
 # ၅။ Home vs Away Section
