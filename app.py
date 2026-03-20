@@ -77,7 +77,6 @@ d = {
 }
 lang = st.session_state.lang
 
-# Competitions (၁၇) ခုစာရင်း (Football-Data & API-Sports IDs)
 league_map = {
     "Premier League (England)": {"fd": "PL", "as": 39},
     "Championship (England)": {"fd": "ELC", "as": 40},
@@ -115,7 +114,7 @@ st.markdown(f'<p style="color:#aaa; margin-left:15px; margin-top:15px;">{d[lang]
 date_option = st.radio("Date Option", d[lang]['date_opts'], horizontal=True, label_visibility="collapsed")
 sel_date = st.date_input("D", value=today_mm, min_value=today_mm, label_visibility="collapsed")
 
-# ၃။ Check Matches Logic (Hybrid Fetching)
+# ၃။ Check Matches Logic
 check_click = st.button(d[lang]["btn_check"], key="check_btn", use_container_width=True)
 
 if check_click:
@@ -123,13 +122,11 @@ if check_click:
     st.session_state.display_matches = []
     l_info = league_map[league_name]
     
-    # ရက်စွဲသတ်မှတ်ခြင်း
-    if date_option == d[lang]['date_opts'][1]: d_from, d_to = today_mm, today_mm + datetime.timedelta(days=1)
-    elif date_option == d[lang]['date_opts'][2]: d_from, d_to = today_mm, today_mm + datetime.timedelta(days=2)
-    else: d_from = d_to = sel_date
+    if date_option == d[lang]['date_opts'][1]: d_from, d_to = today_mm, today_mm + datetime.timedelta(days=2)
+    elif date_option == d[lang]['date_opts'][2]: d_from, d_to = today_mm, today_mm + datetime.timedelta(days=3)
+    else: d_from, d_to = sel_date, sel_date + datetime.timedelta(days=1)
 
     try:
-        # Step A: Football-Data.org (Free Plan ရှိလျှင် ယူမည်)
         if l_info["fd"]:
             fd_token = st.secrets["api_keys"]["FOOTBALL_DATA_KEY"]
             url = f"https://api.football-data.org/v4/competitions/{l_info['fd']}/matches?dateFrom={d_from}&dateTo={d_to}"
@@ -143,10 +140,10 @@ if check_click:
                         'h_logo': m['homeTeam'].get('crest', ''), 'a_logo': m['awayTeam'].get('crest', ''), 'utc_str': m['utcDate'], 'league': league_name
                     })
 
-        # Step B: API-Sports (Football-Data တွင်မရှိသော Cup များ သို့မဟုတ် ပွဲမတွေ့လျှင် ယူမည်)
         if not st.session_state.display_matches:
             as_key = st.secrets["api_keys"]["API_SPORTS_KEY"]
-            as_url = f"https://v3.football.api-sports.io/fixtures?league={l_info['as']}&season=2025&date={sel_date if d_from == d_to else today_mm}"
+            fetch_date = sel_date if date_option == d[lang]['date_opts'][0] else today_mm
+            as_url = f"https://v3.football.api-sports.io/fixtures?league={l_info['as']}&season=2026&date={fetch_date}"
             as_res = requests.get(as_url, headers={'x-rapidapi-key': as_key}).json()
             for f in as_res.get('response', []):
                 utc_dt = datetime.datetime.fromisoformat(f['fixture']['date'].replace('+00:00', ''))
@@ -163,11 +160,22 @@ if check_click:
         
     except Exception as e: st.error(f"Error fetching: {e}")
 
-# Display Matches
+# Display Matches Table with Logos
 if st.session_state.display_matches:
-    st.markdown(f'<div style="color:#FFD700; font-weight:bold; margin:15px;">🏆 {league_name}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="color:#FFD700; font-weight:bold; margin: 15px 0 5px 15px;">🏆 {league_name}</div>', unsafe_allow_html=True)
     for idx, m in enumerate(st.session_state.display_matches, 1):
-        st.markdown(f'<div class="match-row" style="padding:10px; border-bottom:1px solid #333; display:flex; justify-content:space-between;"><span>#{idx} {m["datetime"]}</span><span>{m["home"]} vs {m["away"]}</span></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+            <div class="match-row" style="padding: 15px 10px; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: space-between;">
+                <div style="flex: 1; font-size: 11px; color: #888;">#{idx}<br>{m['datetime']}</div>
+                <div style="flex: 2; text-align: center; font-size: 14px;">
+                    <img src="{m['h_logo']}" width="25" style="vertical-align: middle; margin-right: 5px;"> {m['home']}
+                </div>
+                <div style="flex: 0.5; text-align: center; font-weight: bold; color: #FFD700;">VS</div>
+                <div style="flex: 2; text-align: center; font-size: 14px;">
+                    {m['away']} <img src="{m['a_logo']}" width="25" style="vertical-align: middle; margin-left: 5px;">
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 elif st.session_state.check_performed:
     st.warning(d[lang]['no_fixture'])
 
@@ -176,20 +184,16 @@ st.markdown(f'<div class="title-style" style="font-size:45px; margin-top:20px;">
 
 # Helper Functions
 def get_api_sports_stats(h_team, a_team, match_date):
-    # Part 2 အတွက် API-Sports logic (အစ်ကို့ Key ဖြင့်)
     return None
 
 def get_gemini_response_rotated(prompt):
     gm_key = st.secrets["api_keys"]["GEMINI_KEY"]
     try:
         client = genai.Client(api_key=gm_key)
-        response = client.models.generate_content(
-            model='gemini-flash-latest', # မူရင်း Model မပြောင်းပါ
-            contents=prompt,
-            config={'temperature': 0.7}
-        )
+        response = client.models.generate_content(model='gemini-flash-latest', contents=prompt)
         return response.text
     except Exception as e: return f"AI Error: {str(e)}"
+    
 
 
 # ၅။ Home vs Away Section
