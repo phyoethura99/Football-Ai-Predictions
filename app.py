@@ -1,7 +1,7 @@
 import streamlit as st
 import datetime
 import requests
-from google import genai  # Warning ပျောက်ရန် Version အသစ်သို့ ပြောင်းလဲခြင်း
+from google import genai
 import time
 import json
 import os
@@ -17,11 +17,8 @@ st.set_page_config(
 
 # --- Disk Caching System ---
 CACHE_DIR = "/tmp/data_cache"
-try:
-    if not os.path.exists(CACHE_DIR):
-        os.makedirs(CACHE_DIR, exist_ok=True)
-except Exception:
-    CACHE_DIR = "/tmp"
+if not os.path.exists(CACHE_DIR):
+    os.makedirs(CACHE_DIR, exist_ok=True)
 
 def get_disk_cache(key):
     safe_key = key.replace("/", "_")
@@ -33,37 +30,29 @@ def get_disk_cache(key):
                 expiry = datetime.datetime.fromisoformat(cache_data['expiry'])
                 if datetime.datetime.now(datetime.timezone.utc) < expiry.replace(tzinfo=datetime.timezone.utc):
                     return cache_data['data']
-        except:
-            return None
+        except: return None
     return None
 
-def set_disk_cache(key, data, expiry_dt=None, days=19):
+def set_disk_cache(key, data, expiry_dt=None, days=1):
     if expiry_dt is None:
         expiry_dt = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=days)
-    
     safe_key = key.replace("/", "_")
     file_path = os.path.join(CACHE_DIR, f"{safe_key}.json")
     try:
         with open(file_path, "w") as f:
             json.dump({'data': data, 'expiry': expiry_dt.isoformat()}, f)
-    except Exception as e:
-        st.sidebar.error(f"Cache Error: {str(e)}")
+    except: pass
 
 # Time Handling
 now_mm = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=6, minutes=30)
 today_mm = now_mm.date()
 
 # ၁။ Dictionary & Session State
-if 'lang' not in st.session_state:
-    st.session_state.lang = 'EN'
-if 'h_teams' not in st.session_state:
-    st.session_state.h_teams = ["Select Team"]
-if 'a_teams' not in st.session_state:
-    st.session_state.a_teams = ["Select Team"]
-if 'display_matches' not in st.session_state:
-    st.session_state.display_matches = []
-if 'check_performed' not in st.session_state:
-    st.session_state.check_performed = False
+if 'lang' not in st.session_state: st.session_state.lang = 'EN'
+if 'h_teams' not in st.session_state: st.session_state.h_teams = ["Select Team"]
+if 'a_teams' not in st.session_state: st.session_state.a_teams = ["Select Team"]
+if 'display_matches' not in st.session_state: st.session_state.display_matches = []
+if 'check_performed' not in st.session_state: st.session_state.check_performed = False
 
 def toggle_lang():
     st.session_state.lang = 'MM' if st.session_state.lang == 'EN' else 'EN'
@@ -75,8 +64,6 @@ d = {
         'home': 'HOME TEAM', 'away': 'AWAY TEAM', 'btn_gen': 'Generate Predictions',
         'trans_btn': 'မြန်မာဘာသာသို့ ပြောင်းရန်',
         'date_opts': ["Manual Date", "Within 24 Hours", "Within 48 Hours"],
-        'ai_lang': 'English',
-        'no_match': 'No match found between these teams! Please check the Match Table.',
         'no_fixture': 'No matches available for this date.'
     },
     'MM': {
@@ -85,165 +72,125 @@ d = {
         'home': 'အိမ်ရှင်အသင်း', 'away': 'ဧည့်သည်အသင်း', 'btn_gen': 'ခန့်မှန်းချက် ထုတ်ယူမည်',
         'trans_btn': 'Switch to English',
         'date_opts': ["ရက်စွဲတပ်၍ရှာမည်", "၂၄ နာရီအတွင်း", "၄၈ နာရီအတွင်း"],
-        'ai_lang': 'Burmese',
-        'no_match': 'ရွေးထားသော ပွဲစဉ်မရှိပါ။ Match Table ကို ပြန်စစ်ပါ။',
         'no_fixture': 'ရွေးထားသော ရက်စွဲတွင် ပွဲစဉ်မရှိပါ။'
     }
 }
 lang = st.session_state.lang
 
-# Competitions အားလုံး စုံအောင် ဖြည့်စွက်ထားသည်
-league_codes = {
-    "All Leagues": "ALL",
-    "Premier League (England)": "PL",
-    "Champions League (Europe)": "CL",
-    "La Liga (Spain)": "PD",
-    "Bundesliga (Germany)": "BL1",
-    "Serie A (Italy)": "SA",
-    "Ligue 1 (France)": "FL1",
-    "Europa League (Europe)": "EL",
-    "Eredivisie (Netherlands)": "DED",
-    "Primeira Liga (Portugal)": "PPL"
-}
-
-league_name_map = {
-    "Premier League": "Premier League (England)",
-    "UEFA Champions League": "Champions League (Europe)",
-    "Primera Division": "La Liga (Spain)",
-    "Bundesliga": "Bundesliga (Germany)",
-    "Serie A": "Serie A (Italy)",
-    "Ligue 1": "Ligue 1 (France)",
-    "UEFA Europa League": "Europa League (Europe)",
-    "Eredivisie": "Eredivisie (Netherlands)",
-    "Primeira Liga": "Primeira Liga (Portugal)"
+# Competitions (၁၇) ခုစာရင်း (Football-Data & API-Sports IDs)
+league_map = {
+    "Premier League (England)": {"fd": "PL", "as": 39},
+    "Championship (England)": {"fd": "ELC", "as": 40},
+    "FA Cup (England)": {"fd": None, "as": 45},
+    "Carabao Cup (England)": {"fd": None, "as": 48},
+    "Champions League (Europe)": {"fd": "CL", "as": 2},
+    "Europa League (Europe)": {"fd": "EL", "as": 3},
+    "Conference League (Europe)": {"fd": "ECL", "as": 848},
+    "La Liga (Spain)": {"fd": "PD", "as": 140},
+    "Copa del Rey (Spain)": {"fd": None, "as": 143},
+    "Bundesliga (Germany)": {"fd": "BL1", "as": 78},
+    "DFB Pokal (Germany)": {"fd": None, "as": 175},
+    "Serie A (Italy)": {"fd": "SA", "as": 135},
+    "Coppa Italia (Italy)": {"fd": None, "as": 137},
+    "Ligue 1 (France)": {"fd": "FL1", "as": 61},
+    "Eredivisie (Netherlands)": {"fd": "DED", "as": 88},
+    "Primeira Liga (Portugal)": {"fd": "PPL", "as": 94},
+    "Serie A (Brazil)": {"fd": "BSA", "as": 71}
 }
 
 with open("style.css") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-# Language Toggle
 col_space, col_lang = st.columns([7, 3])
 with col_lang:
-    st.markdown('<div class="lang-wrapper">', unsafe_allow_html=True)
     st.button(d[lang]["trans_btn"], key="lang_btn", on_click=toggle_lang, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown(f'<div class="title-style">{d[lang]["title1"]}</div>', unsafe_allow_html=True)
 
 # ၂။ Select League & Date
 st.markdown(f'<p style="color:#aaa; margin-left:15px;">{d[lang]["sel_league"]}</p>', unsafe_allow_html=True)
-league = st.selectbox("L", list(league_codes.keys()), index=1, label_visibility="collapsed")
+league_name = st.selectbox("L", list(league_map.keys()), index=0, label_visibility="collapsed")
 
 st.markdown(f'<p style="color:#aaa; margin-left:15px; margin-top:15px;">{d[lang]["sel_date"]}</p>', unsafe_allow_html=True)
 date_option = st.radio("Date Option", d[lang]['date_opts'], horizontal=True, label_visibility="collapsed")
 sel_date = st.date_input("D", value=today_mm, min_value=today_mm, label_visibility="collapsed")
 
-# ၃။ Check Matches Now
-st.markdown('<div class="check-btn-wrapper">', unsafe_allow_html=True)
+# ၃။ Check Matches Logic (Hybrid Fetching)
 check_click = st.button(d[lang]["btn_check"], key="check_btn", use_container_width=True)
-st.markdown('</div>', unsafe_allow_html=True)
 
 if check_click:
     st.session_state.check_performed = True
-    progress_bar = st.progress(0)
-    for percent_complete in range(100):
-        time.sleep(0.01)
-        progress_bar.progress(percent_complete + 1)
+    st.session_state.display_matches = []
+    l_info = league_map[league_name]
     
-    with st.spinner('Checking Matches...'):
-        try:
-            l_code = league_codes[league]
-            token = st.secrets["api_keys"]["FOOTBALL_DATA_KEY"]
-            
-            if date_option == d[lang]['date_opts'][1]:
-                d_from, d_to = today_mm, today_mm + datetime.timedelta(days=1)
-            elif date_option == d[lang]['date_opts'][2]:
-                d_from, d_to = today_mm, today_mm + datetime.timedelta(days=2)
-            else:
-                d_from = d_to = sel_date
+    # ရက်စွဲသတ်မှတ်ခြင်း
+    if date_option == d[lang]['date_opts'][1]: d_from, d_to = today_mm, today_mm + datetime.timedelta(days=1)
+    elif date_option == d[lang]['date_opts'][2]: d_from, d_to = today_mm, today_mm + datetime.timedelta(days=2)
+    else: d_from = d_to = sel_date
 
-            if l_code == "ALL":
-                target_codes = ",".join([v for k, v in league_codes.items() if v != "ALL"])
-                url = f"https://api.football-data.org/v4/matches?competitions={target_codes}&dateFrom={d_from}&dateTo={d_to}"
-            else:
-                url = f"https://api.football-data.org/v4/competitions/{l_code}/matches?dateFrom={d_from}&dateTo={d_to}"
-            
-            headers = {'X-Auth-Token': token}
-            response = requests.get(url, headers=headers)
-            data = response.json()
-            matches = data.get('matches', [])
-            
-            st.session_state.display_matches = [] 
-            if matches:
-                h_set, a_set = set(), set()
-                for m in matches:
+    try:
+        # Step A: Football-Data.org (Free Plan ရှိလျှင် ယူမည်)
+        if l_info["fd"]:
+            fd_token = st.secrets["api_keys"]["FOOTBALL_DATA_KEY"]
+            url = f"https://api.football-data.org/v4/competitions/{l_info['fd']}/matches?dateFrom={d_from}&dateTo={d_to}"
+            res = requests.get(url, headers={'X-Auth-Token': fd_token}).json()
+            if 'matches' in res:
+                for m in res['matches']:
                     utc_dt = datetime.datetime.strptime(m['utcDate'], "%Y-%m-%dT%H:%M:%SZ")
                     mm_dt = utc_dt + datetime.timedelta(hours=6, minutes=30)
-                    h, a = m['homeTeam']['name'], m['awayTeam']['name']
-                    l_display = league_name_map.get(m['competition']['name'], m['competition']['name'])
-                    h_set.add(h); a_set.add(a)
                     st.session_state.display_matches.append({
-                        'datetime': mm_dt.strftime("%d/%m %H:%M"), 'home': h, 'away': a, 'league': l_display,
-                        'h_logo': m['homeTeam'].get('crest', ''), 'a_logo': m['awayTeam'].get('crest', ''), 'utc_str': m['utcDate']
+                        'datetime': mm_dt.strftime("%d/%m %H:%M"), 'home': m['homeTeam']['name'], 'away': m['awayTeam']['name'],
+                        'h_logo': m['homeTeam'].get('crest', ''), 'a_logo': m['awayTeam'].get('crest', ''), 'utc_str': m['utcDate'], 'league': league_name
                     })
-                st.session_state.h_teams = ["Select Team"] + sorted(list(h_set))
-                st.session_state.a_teams = ["Select Team"] + sorted(list(a_set))
-            else:
-                st.session_state.h_teams = ["No matches found"]
-                st.session_state.a_teams = ["No matches found"]
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
 
-# Display Matches Table
+        # Step B: API-Sports (Football-Data တွင်မရှိသော Cup များ သို့မဟုတ် ပွဲမတွေ့လျှင် ယူမည်)
+        if not st.session_state.display_matches:
+            as_key = st.secrets["api_keys"]["API_SPORTS_KEY"]
+            as_url = f"https://v3.football.api-sports.io/fixtures?league={l_info['as']}&season=2025&date={sel_date if d_from == d_to else today_mm}"
+            as_res = requests.get(as_url, headers={'x-rapidapi-key': as_key}).json()
+            for f in as_res.get('response', []):
+                utc_dt = datetime.datetime.fromisoformat(f['fixture']['date'].replace('+00:00', ''))
+                mm_dt = utc_dt + datetime.timedelta(hours=6, minutes=30)
+                st.session_state.display_matches.append({
+                    'datetime': mm_dt.strftime("%d/%m %H:%M"), 'home': f['teams']['home']['name'], 'away': f['teams']['away']['name'],
+                    'h_logo': f['teams']['home'].get('logo', ''), 'a_logo': f['teams']['away'].get('logo', ''), 'utc_str': f['fixture']['date'], 'league': league_name
+                })
+        
+        h_set = {m['home'] for m in st.session_state.display_matches}
+        a_set = {m['away'] for m in st.session_state.display_matches}
+        st.session_state.h_teams = ["Select Team"] + sorted(list(h_set)) if h_set else ["No matches found"]
+        st.session_state.a_teams = ["Select Team"] + sorted(list(a_set)) if a_set else ["No matches found"]
+        
+    except Exception as e: st.error(f"Error fetching: {e}")
+
+# Display Matches
 if st.session_state.display_matches:
-    grouped = {}
-    for m in st.session_state.display_matches:
-        grouped.setdefault(m['league'], []).append(m)
-    for l_title, matches_list in grouped.items():
-        st.markdown(f'<div style="color:#FFD700; font-weight:bold; margin: 15px 0 5px 15px;">🏆 {l_title}</div>', unsafe_allow_html=True)
-        for idx, m in enumerate(matches_list, 1):
-            st.markdown(f'<div class="match-row" style="padding:10px; border-bottom:1px solid #333; display:flex; justify-content:space-between;"><span>#{idx} {m["datetime"]}</span><span>{m["home"]} vs {m["away"]}</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="color:#FFD700; font-weight:bold; margin:15px;">🏆 {league_name}</div>', unsafe_allow_html=True)
+    for idx, m in enumerate(st.session_state.display_matches, 1):
+        st.markdown(f'<div class="match-row" style="padding:10px; border-bottom:1px solid #333; display:flex; justify-content:space-between;"><span>#{idx} {m["datetime"]}</span><span>{m["home"]} vs {m["away"]}</span></div>', unsafe_allow_html=True)
 elif st.session_state.check_performed:
-    st.error(d[lang]['no_fixture'])
+    st.warning(d[lang]['no_fixture'])
 
 # ၄။ Select Team Title
 st.markdown(f'<div class="title-style" style="font-size:45px; margin-top:20px;">{d[lang]["title2"]}</div>', unsafe_allow_html=True)
 
-# --- Helper: API-Sports Data Fetching (No Rotate) ---
+# Helper Functions
 def get_api_sports_stats(h_team, a_team, match_date):
-    api_key = st.secrets["api_keys"]["API_SPORTS_KEY"]
-    headers = {'x-rapidapi-host': "v3.football.api-sports.io", 'x-rapidapi-key': api_key}
-    try:
-        res = requests.get(f"https://v3.football.api-sports.io/fixtures?date={match_date}", headers=headers, timeout=15).json()
-        fixture = next((f for f in res.get('response', []) if h_team.lower() in f['teams']['home']['name'].lower() or a_team.lower() in f['teams']['away']['name'].lower()), None)
-        if not fixture: return None
-        f_id, h_id, a_id = fixture['fixture']['id'], fixture['teams']['home']['id'], fixture['teams']['away']['id']
-        inj = requests.get(f"https://v3.football.api-sports.io/injuries?fixture={f_id}", headers=headers).json()
-        stand = requests.get(f"https://v3.football.api-sports.io/standings?league={fixture['league']['id']}&season={fixture['league']['season']}", headers=headers).json()
-        h_next = requests.get(f"https://v3.football.api-sports.io/fixtures?team={h_id}&next=1", headers=headers).json()
-        a_next = requests.get(f"https://v3.football.api-sports.io/fixtures?team={a_id}&next=1", headers=headers).json()
-        return {
-            'injuries': inj.get('response', []), 'standings': str(stand.get('response', [])),
-            'h_schedule': h_next.get('response', []), 'a_schedule': a_next.get('response', []),
-            'h_id': h_id, 'a_id': a_id, 'league_name': fixture['league']['name']
-        }
-    except: return None
+    # Part 2 အတွက် API-Sports logic (အစ်ကို့ Key ဖြင့်)
+    return None
 
-# --- Helper: AI Response (No Rotate, Correct Model Name) ---
 def get_gemini_response_rotated(prompt):
-    key = st.secrets["api_keys"]["GEMINI_KEY"]
+    gm_key = st.secrets["api_keys"]["GEMINI_KEY"]
     try:
-        client = genai.Client(api_key=key)
+        client = genai.Client(api_key=gm_key)
         response = client.models.generate_content(
-            model='gemini-flash-latest', # မူရင်းအတိုင်း ထားရှိပါသည်
+            model='gemini-flash-latest', # မူရင်း Model မပြောင်းပါ
             contents=prompt,
-            config={'temperature': 0}
+            config={'temperature': 0.7}
         )
         return response.text
-    except Exception as e:
-        return f"⚠️ AI Service Busy: {str(e)}"
-        
-                        
+    except Exception as e: return f"AI Error: {str(e)}"
+
 
 # ၅။ Home vs Away Section
 c1, cvs, c2 = st.columns([2, 1, 2])
