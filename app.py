@@ -195,8 +195,8 @@ def get_gemini_response_rotated(prompt):
         return response.text
     except Exception as e: return f"AI Error: {str(e)}"
     
-    
-# ၅။ Home vs Away Section
+
+    # ၅။ Home vs Away Section
 st.markdown(f'<div class="title-style" style="font-size:45px; margin-top:20px;">{d[lang]["home"]} vs {d[lang]["away"]}</div>', unsafe_allow_html=True)
 
 # --- Helper: API-Sports Data Fetching ---
@@ -204,19 +204,34 @@ def get_api_sports_stats(h_team, a_team, match_date):
     as_key = st.secrets["api_keys"]["API_SPORTS_KEY"]
     headers = {'x-rapidapi-host': "v3.football.api-sports.io", 'x-rapidapi-key': as_key}
     
+    # လက်ရှိ Selectbox မှာ ရွေးထားတဲ့ League ရဲ့ API-Sports ID ကို ယူခြင်း
+    current_league_name = st.session_state.get('league_name_current', league_name)
+    current_league_id = league_map.get(current_league_name, {}).get('as')
+    
     try:
-        # ၁။ Fixture ID ရှာဖွေခြင်း
-        search_url = f"https://v3.football.api-sports.io/fixtures?date={match_date}"
+        # ၁။ Fixture ID ရှာဖွေခြင်း (League ID ပါ ထည့်သွင်း၍ U19 နှင့် မမှားအောင် ကာကွယ်ထားသည်)
+        # Cup ပွဲများအတွက် Season 2025 ကို အဓိကထားရှာပါမည်
+        search_url = f"https://v3.football.api-sports.io/fixtures?date={match_date}&league={current_league_id}&season=2025"
         res = requests.get(search_url, headers=headers, timeout=15).json()
         
         fixture_obj = None
-        if 'response' in res:
+        if 'response' in res and res['response']:
             for f in res['response']:
                 f_home, f_away = f['teams']['home']['name'].lower(), f['teams']['away']['name'].lower()
                 if (h_team.lower() in f_home or f_home in h_team.lower()) and (a_team.lower() in f_away or f_away in a_team.lower()):
                     fixture_obj = f
                     break
         
+        # အကယ်၍ 2025 တွင် မတွေ့ပါက Season 2026 ဖြင့် ထပ်မံ ကြိုးစားရှာဖွေခြင်း
+        if not fixture_obj:
+            res_alt = requests.get(f"https://v3.football.api-sports.io/fixtures?date={match_date}&league={current_league_id}&season=2026", headers=headers, timeout=15).json()
+            if 'response' in res_alt and res_alt['response']:
+                for f in res_alt['response']:
+                    f_home, f_away = f['teams']['home']['name'].lower(), f['teams']['away']['name'].lower()
+                    if (h_team.lower() in f_home or f_home in h_team.lower()) and (a_team.lower() in f_away or f_away in a_team.lower()):
+                        fixture_obj = f
+                        break
+
         if not fixture_obj: return None
         
         f_id = fixture_obj['fixture']['id']
@@ -268,7 +283,6 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 if gen_click:
     if h_team and a_team and h_team not in ["Select Team", "No matches found"]:
-        # Match list ထဲမှာ ရှိမရှိ စစ်ဆေးခြင်း
         match_obj = next((m for m in st.session_state.get('display_matches', []) if m['home'] == h_team and m['away'] == a_team), None)
         
         if match_obj:
@@ -284,8 +298,8 @@ if gen_click:
                 if cached_result:
                     st.markdown(cached_result, unsafe_allow_html=True)
                 else:
-                    # API မှ အချက်အလက်ယူခြင်း
-                    real_data = get_api_sports_stats(h_team, a_team, today_mm.isoformat())
+                    # ဇယားထဲက ရက်စွဲအတိုင်း အတိအကျ ပြန်ရှာခြင်း
+                    real_data = get_api_sports_stats(h_team, a_team, sel_date.isoformat())
                     if real_data:
                         injury_list = [f"{i['player']['name']} ({i['player']['reason']})" for i in real_data.get('injuries', [])]
                         
@@ -315,7 +329,7 @@ if gen_click:
                         set_disk_cache(cache_key, final_output)
                         st.markdown(final_output, unsafe_allow_html=True)
                     else:
-                        st.error("⚠️ API Data not found. Please try 'Manual Date' to pick the exact match date.")
+                        st.error("⚠️ API Data not found. Please ensure the 'Match Table' is updated.")
     else:
         st.warning("Please select teams from the match table first!")
         
